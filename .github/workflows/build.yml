@@ -1,10 +1,9 @@
 name: 雲端自動打包 EXE
 
-# 觸發條件：改為當網頁首頁(main分支)有任何檔案變更，或是手動執行時就觸發
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: # 允許我們在網頁上點擊按鈕手動觸發
+  workflow_dispatch:
 
 jobs:
   build:
@@ -28,9 +27,19 @@ jobs:
       run: |
         pyinstaller --noconsole main.py
 
-    # 💡 這次我們不建立正式 Release，直接把 EXE 存放在 Actions 的產出物中
-    - name: 上傳打包好的 EXE 檔案
+    # 修正版上傳：移除中文名稱，改用純英文與最新版 v4 確保相容性
+    - name: 上傳打包好的 EXE 檔案到 Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: 工單資料擷取器-電腦執行檔
+        name: ExcelViewer-EXE
         path: dist/main.exe
+
+    # 雙重保險：直接在網頁右側建立一個自動發布版 (Release)
+    - name: 自動發布到 GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: latest
+        name: "最新編譯版本 (免安裝執行檔)"
+        files: dist/main.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
