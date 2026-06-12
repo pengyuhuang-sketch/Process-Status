@@ -8,13 +8,12 @@ class ExcelViewerApp:
 
     def __init__(self, root):
         self.root = root
-        self.root.title("工單詳細資料擷取器")
+        self.root.title("工單詳細資料擷取器 (穩定版)")
 
         # 設定視窗初始大小
-        self.root.geometry("900x550" if os.name == "nt" else "950x580")
+        self.root.geometry("950x550" if os.name == "nt" else "1000x580")
 
         # --- 介面配置 ---
-        # 1. 上方操作按鈕區
         self.top_frame = tk.Frame(root)
         self.top_frame.pack(pady=15, padx=20, fill=tk.X)
 
@@ -38,18 +37,16 @@ class ExcelViewerApp:
         )
         self.file_label.pack(side=tk.LEFT, padx=15)
 
-        # 2. 中間資料顯示區 (表格與雙向滾動條)
+        # 雙向滾動條設計
         self.table_frame = tk.Frame(root)
         self.table_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
 
-        # 建立垂直 (Y) 與水平 (X) 滾動條
         self.v_scrollbar = ttk.Scrollbar(self.table_frame, orient=tk.VERTICAL)
         self.v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.h_scrollbar = ttk.Scrollbar(self.table_frame, orient=tk.HORIZONTAL)
         self.h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
 
-        # 建立表格元件
         self.tree = ttk.Treeview(
             self.table_frame,
             yscrollcommand=self.v_scrollbar.set,
@@ -57,11 +54,9 @@ class ExcelViewerApp:
         )
         self.tree.pack(fill=tk.BOTH, expand=True)
 
-        # 設定滾動條連動
         self.v_scrollbar.config(command=self.tree.yview)
         self.h_scrollbar.config(command=self.tree.xview)
 
-        # 設定表格美化樣式 (字體與行高)
         style = ttk.Style()
         style.configure("Treeview", font=("Microsoft JhengHei", 10), rowheight=25)
         style.configure(
@@ -69,7 +64,6 @@ class ExcelViewerApp:
         )
 
     def open_excel(self):
-        # 彈出檔案選擇視窗
         file_path = filedialog.askopenfilename(
             title="請選擇工單 Excel 檔案",
             filetypes=[("Excel Files", "*.xlsx *.xls")],
@@ -81,13 +75,13 @@ class ExcelViewerApp:
         self.file_label.config(text=f"已載入：{os.path.basename(file_path)}", fg="green")
 
         try:
-            # 讀取 Excel (預設讀取第一個工作表 Sheet1)
+            # 讀取 Excel 檔案
             df = pd.read_excel(file_path)
 
-            # 💡 依照您的需求，嚴格定義從左到右的 11 個目標欄位
-            target_columns = [
+            # 畫面上希望按順序出現的中文表頭
+            display_headers = [
                 "工單編號",
-                "產品編號",
+                "工單產品編號",
                 "產品名稱",
                 "工單數量",
                 "批號",
@@ -99,33 +93,64 @@ class ExcelViewerApp:
                 "訂單編號",
             ]
 
-            # 檢查 Excel 裡面是否缺少這些欄位
-            missing_cols = [col for col in target_columns if col not in df.columns]
+            # 1. 建立一個對應字典，解決 Excel 內可能有空格或不同寫法的問題
+            # 將 Excel 實際存在的欄位映射到我們的標準中文名稱
+            col_mapping = {}
+
+            for real_col in df.columns:
+                cleaned = str(real_col).strip().replace(" ", "")  # 去除前後空格與內部空格
+                
+                if cleaned == "工單編號":
+                    col_mapping[real_col] = "工單編號"
+                elif cleaned in ["工單產品編號", "產品編號"]:
+                    col_mapping[real_col] = "工單產品編號"
+                elif cleaned == "產品名稱":
+                    col_mapping[real_col] = "產品名稱"
+                elif cleaned == "工單數量":
+                    col_mapping[real_col] = "工單數量"
+                elif cleaned == "批號":
+                    col_mapping[real_col] = "批號"
+                elif cleaned in ["目前數量", "目 前 數 量"]:
+                    col_mapping[real_col] = "目前數量"
+                elif cleaned == "作業站編號":
+                    col_mapping[real_col] = "作業站編號"
+                elif cleaned == "狀態":
+                    col_mapping[real_col] = "狀態"
+                elif cleaned == "到達時間":
+                    col_mapping[real_col] = "到達時間"
+                elif cleaned == "區段編號":
+                    col_mapping[real_col] = "區段編號"
+                elif cleaned == "訂單編號":
+                    col_mapping[real_col] = "訂單編號"
+
+            # 2. 重新命名欄位
+            df = df.rename(columns=col_mapping)
+
+            # 3. 檢查重命名後的欄位是否完整
+            missing_cols = [col for col in display_headers if col not in df.columns]
             if missing_cols:
                 messagebox.showerror(
                     "欄位不匹配",
-                    f"在此 Excel 中找不到以下必要欄位：\n{', '.join(missing_cols)}\n\n請檢查 Excel 的第一行表頭文字是否正確。",
+                    f"在此 Excel 中找不到以下必要欄位：\n{', '.join(missing_cols)}\n\n請確認 Excel 欄位名稱是否正確。",
                 )
                 return
 
-            # 擷取並自動依 target_columns 的順序重新排列欄位
-            filtered_df = df[target_columns]
+            # 4. 僅擷取指定的這 11 個欄位並排序
+            filtered_df = df[display_headers]
 
-            # 清除舊的表格資料與舊的欄位設定
+            # 5. 清除畫面舊資料
             self.tree.delete(*self.tree.get_children())
 
-            # 重新設定表格的欄位與標題
-            self.tree["columns"] = target_columns
+            # 6. 設定表格
+            self.tree["columns"] = display_headers
             self.tree["show"] = "headings"
 
-            for col in target_columns:
+            for col in display_headers:
                 self.tree.heading(col, text=col)
-                # 設定每個欄位的基本寬度為 120 像素，並靠中對齊
                 self.tree.column(col, width=120, anchor="center")
 
-            # 將資料逐行寫入畫面
+            # 7. 寫入資料
             for _, row in filtered_df.iterrows():
-                # 將 NaN (空值) 轉為空字串，避免畫面顯示 "nan"
                 row_values = [
                     "" if pd.isna(val) else str(val) for val in row.values
                 ]
