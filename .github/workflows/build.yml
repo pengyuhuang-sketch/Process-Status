@@ -5,6 +5,10 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+# 加入全域環境變數，解決 Node 20 過期警告問題
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: windows-latest
@@ -23,23 +27,23 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    # 💡 這裡加上 --log-level=WARN 幫助偵測打包過程
     - name: 使用 PyInstaller 打包成 EXE
       run: |
-        pyinstaller --noconsole main.py
+        pyinstaller --onefile --noconsole --log-level=WARN main.py
 
-    # 修正版上傳：移除中文名稱，改用純英文與最新版 v4 確保相容性
     - name: 上傳打包好的 EXE 檔案到 Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: ExcelViewer-EXE
         path: dist/main.exe
 
-    # 雙重保險：直接在網頁右側建立一個自動發布版 (Release)
     - name: 自動發布到 GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
         name: "最新編譯版本 (免安裝執行檔)"
         files: dist/main.exe
+        make_latest: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
