@@ -5,9 +5,9 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
-# 加入全域環境變數，解決 Node 20 過期警告問題
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "true"
 
 jobs:
   build:
@@ -27,8 +27,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    # 💡 這裡加上 --log-level=WARN 幫助偵測打包過程
-    - name: 使用 PyInstaller 打包成 EXE
+    - name: 使用 PyInstaller 打包成單一 EXE
       run: |
         pyinstaller --onefile --noconsole --log-level=WARN main.py
 
