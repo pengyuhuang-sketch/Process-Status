@@ -1,4 +1,4 @@
-name: 雲端自動打包 EXE
+name: 雲端製作免安裝執行包
 
 on:
   push:
@@ -17,32 +17,51 @@ jobs:
     - name: 檢出程式碼
       uses: actions/checkout@v4
 
-    - name: 設定 Python 環境
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-
-    - name: 安裝依賴套件
+    # 1. 下載微軟 Windows 官方認證的 Python 綠色免安裝版 (3.10.11)
+    - name: 下載原生的 Python 綠色嵌入版
+      shell: powershell
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.10.11/python-3.10.11-embed-amd64.zip" -OutFile "python-embed.zip"
+        Expand-Archive -Path "python-embed.zip" -DestinationPath "dist/ExcelViewer"
 
-    - name: 使用 PyInstaller 打包成單一 EXE
+    # 2. 設定綠色版 Python，使其允許安裝並讀取第三方套件
+    - name: 設定 Python 環境環境
+      shell: powershell
       run: |
-        pyinstaller --onefile --noconsole --log-level=WARN main.py
+        $pth = "dist/ExcelViewer/python310._pth"
+        (Get-Content $pth) | ForEach-Object { $_ -replace '#import site', 'import site' } | Set-Content $pth
 
-    - name: 上傳打包好的 EXE 檔案到 Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: ExcelViewer-EXE
-        path: dist/main.exe
+    # 3. 在綠色版環境中安裝 pandas, openpyxl 
+    - name: 安裝 Excel 依賴套件
+      run: |
+        dist/ExcelViewer/python.exe -m pip install --upgrade pip
+        dist/ExcelViewer/python.exe -m pip install -r requirements.txt
+
+    # 4. 把我們寫好的 main.py 複製進去
+    - name: 封裝主程式
+      shell: powershell
+      run: |
+        Copy-Item "main.py" -Destination "dist/ExcelViewer/main.py"
+
+    # 5. 建立一個絕對不會被 Windows 封鎖的 .bat 啟動指令檔
+    - name: 建立 Windows 啟動批次檔
+      shell: powershell
+      run: |
+        # 建立一個隱藏黑視窗直接啟動視窗程式的 bat
+        "@echo off`r`nstart `"`" `"%~dp0pythonw.exe`" `"%~dp0main.py`"" | Out-File -FilePath "dist/ExcelViewer/點我啟動程式.bat" -Encoding ascii
+
+    # 6. 將整個乾淨的資料夾壓縮成 ZIP
+    - name: 壓縮成果
+      shell: powershell
+      run: |
+        Compress-Archive -Path dist/ExcelViewer\* -DestinationPath dist/ExcelViewer-Package.zip
 
     - name: 自動發布到 GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
-        name: "最新編譯版本 (免安裝執行檔)"
-        files: dist/main.exe
+        name: "最新原生存取版本 (免安裝資料夾)"
+        files: dist/ExcelViewer-Package.zip
         make_latest: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
